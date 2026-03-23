@@ -47,6 +47,17 @@ npm run db:push
 npm run dev
 ```
 
+### Testing local
+
+```bash
+npm test
+npm run test:watch
+npx tsc --noEmit
+npx eslint src/lib/gameFilters.ts src/lib/openings.ts src/lib/training-engine.ts tests/lib/*.test.ts
+```
+
+Los tests corren con Vitest en entorno Node, sin red y sin depender de Lichess.
+
 ### Development without Database
 
 The app can run without a database - it will fetch data directly from Lichess API.

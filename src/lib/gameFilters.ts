@@ -49,18 +49,20 @@ export function parseGameFilters(
   defaults: { max?: number } = {}
 ): GameFilters {
   const perfType = searchParams.get("perfType");
+  const time = searchParams.get("time");
   const color = searchParams.get("color");
   const max = parseNumber(searchParams.get("max")) ?? defaults.max;
   const since = parseNumber(searchParams.get("since"));
   const until = parseNumber(searchParams.get("until"));
   const rated = parseBoolean(searchParams.get("rated"));
+  const selectedPerfType = isTimeFilter(perfType) ? perfType : isTimeFilter(time) ? time : undefined;
 
   return {
     ...(max !== undefined ? { max } : {}),
     ...(since !== undefined ? { since } : {}),
     ...(until !== undefined ? { until } : {}),
     ...(rated !== undefined ? { rated } : {}),
-    ...(isTimeFilter(perfType) ? { perfType } : {}),
+    ...(selectedPerfType ? { perfType: selectedPerfType } : {}),
     ...(isColorFilter(color) ? { color } : {}),
   };
 }
