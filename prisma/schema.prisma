@@ -67,3 +67,19 @@ model OpeningStats {
 
   @@unique([userId, eco])
 }
+
+model OpeningVariantComment {
+  id        String   @id @default(cuid())
+  username  String
+  eco       String
+  variantId String
+  moveKey   String
+  comment   String
+  annotation String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([username, eco, variantId, moveKey])
+  @@index([username, eco, variantId])
+  @@index([username, eco])
+}

@@ -1,4 +1,5 @@
 export * from "./review";
+export * from "./comments";
 
 export interface OpeningData {
   eco: string;
