@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, ChevronLeft, ChevronRight, Grid2x2, RotateCcw } from "lucide-react";
 import { ChessBoard } from "@/components/chess/ChessBoard";
@@ -8,6 +8,12 @@ import { Button } from "@/components/ui/Button";
 import { cn, calculateWinrate } from "@/lib/utils";
 import { useOpeningVariantStore } from "@/store/openingVariantStore";
 import type { OpeningVariant, VariantMove } from "@/types";
+import {
+  VARIANT_NOTE_KEY,
+  deleteOpeningVariantComment,
+  fetchOpeningVariantComments,
+  saveOpeningVariantComment,
+} from "@/lib/opening-variant-comments";
 import { VariantCommentsPanel } from "./VariantCommentsPanel";
 import { VariantMoveList } from "./VariantMoveList";
 
@@ -33,6 +39,8 @@ export function OpeningVariantDetailClient({ username, eco, openingName, variant
   const variantStorageKey = `${username}:${variant.id}`;
   const [selectedIndex, setSelectedIndex] = useState(variant.moves.length > 0 ? 0 : -1);
   const [boardWidth, setBoardWidth] = useState(360);
+  const syncCountersRef = useRef<Record<string, number>>({});
+  const syncRequestKey = useCallback((commentKey: string) => `${variantStorageKey}:${commentKey}`, [variantStorageKey]);
 
   useEffect(() => {
     setSelectedIndex(variant.moves.length > 0 ? 0 : -1);
@@ -55,12 +63,144 @@ export function OpeningVariantDetailClient({ username, eco, openingName, variant
     [selectedIndex, variant.moves]
   );
 
-  const variantNote = useOpeningVariantStore((state) => state.variants[variantStorageKey]?.variantNote ?? "");
-  const moveComment = useOpeningVariantStore((state) =>
-    selectedMove ? state.variants[variantStorageKey]?.moveComments[selectedMove.pathKey] ?? "" : ""
-  );
+  const variantState = useOpeningVariantStore((state) => state.variants[variantStorageKey]);
+  const variantNote = variantState?.variantNote.value ?? "";
+  const variantNoteSyncStatus = variantState?.variantNote.syncStatus ?? (variantState ? "synced" : "idle");
+  const variantNoteSyncError = variantState?.variantNote.error ?? null;
+  const moveCommentEntry = selectedMove ? variantState?.moveComments[selectedMove.pathKey] : undefined;
+  const moveComment = moveCommentEntry?.value ?? "";
+  const moveCommentSyncStatus = moveCommentEntry?.syncStatus ?? (selectedMove ? "idle" : "idle");
+  const moveCommentSyncError = moveCommentEntry?.error ?? null;
+  const backendStatus = variantState?.backendStatus ?? "idle";
+  const backendError = variantState?.backendError ?? null;
+
   const setVariantNote = useOpeningVariantStore((state) => state.setVariantNote);
   const setMoveComment = useOpeningVariantStore((state) => state.setMoveComment);
+  const hydrateVariantComments = useOpeningVariantStore((state) => state.hydrateVariantComments);
+  const setVariantBackendStatus = useOpeningVariantStore((state) => state.setVariantBackendStatus);
+  const setCommentSyncStatus = useOpeningVariantStore((state) => state.setCommentSyncStatus);
+  const markCommentSynced = useOpeningVariantStore((state) => state.markCommentSynced);
+
+  const loadVariantComments = useCallback(async () => {
+    setVariantBackendStatus(variantStorageKey, "loading");
+
+    try {
+      const comments = await fetchOpeningVariantComments({ username, eco, variantId: variant.id });
+      hydrateVariantComments(variantStorageKey, comments);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to load variant comments";
+      setVariantBackendStatus(variantStorageKey, "error", message);
+    }
+  }, [eco, hydrateVariantComments, setVariantBackendStatus, username, variant.id, variantStorageKey]);
+
+  const syncComment = useCallback(
+    async (commentKey: string, rawValue: string) => {
+      const requestKey = syncRequestKey(commentKey);
+      const normalizedValue = rawValue.trim();
+      const requestId = (syncCountersRef.current[requestKey] ?? 0) + 1;
+      syncCountersRef.current[requestKey] = requestId;
+
+      setCommentSyncStatus(variantStorageKey, commentKey, "saving");
+
+      try {
+        if (normalizedValue.length === 0) {
+          await deleteOpeningVariantComment({ username, eco, variantId: variant.id, moveKey: commentKey });
+        } else {
+          await saveOpeningVariantComment({
+            username,
+            eco,
+            variantId: variant.id,
+            moveKey: commentKey,
+            comment: normalizedValue,
+          });
+        }
+
+        if (syncCountersRef.current[requestKey] !== requestId) {
+          return;
+        }
+
+        const currentValue = useOpeningVariantStore.getState().variants[variantStorageKey]?.variantNote.value;
+        const currentMoveValue = useOpeningVariantStore.getState().variants[variantStorageKey]?.moveComments[commentKey]?.value;
+        const latestValue = commentKey === VARIANT_NOTE_KEY ? currentValue : currentMoveValue;
+
+        if (latestValue !== rawValue) {
+          return;
+        }
+
+        markCommentSynced(variantStorageKey, commentKey, normalizedValue);
+      } catch (error) {
+        if (syncCountersRef.current[requestKey] !== requestId) {
+          return;
+        }
+
+        const message = error instanceof Error ? error.message : "Failed to sync comment";
+        const currentValue = useOpeningVariantStore.getState().variants[variantStorageKey]?.variantNote.value;
+        const currentMoveValue = useOpeningVariantStore.getState().variants[variantStorageKey]?.moveComments[commentKey]?.value;
+        const latestValue = commentKey === VARIANT_NOTE_KEY ? currentValue : currentMoveValue;
+
+        if (latestValue !== rawValue) {
+          return;
+        }
+
+        setCommentSyncStatus(variantStorageKey, commentKey, "error", message);
+      }
+    },
+    [eco, markCommentSynced, setCommentSyncStatus, syncRequestKey, username, variant.id, variantStorageKey]
+  );
+
+  useEffect(() => {
+    void loadVariantComments();
+  }, [loadVariantComments]);
+
+  useEffect(() => {
+    if (!variantState) {
+      return;
+    }
+
+    if (variantNoteSyncStatus === "error" || variantNoteSyncStatus === "saving") {
+      return;
+    }
+
+    if (variantNote === (variantState.variantNote.serverValue ?? "")) {
+      return;
+    }
+
+    const handle = window.setTimeout(() => {
+      void syncComment(VARIANT_NOTE_KEY, variantNote);
+    }, 500);
+
+    return () => window.clearTimeout(handle);
+  }, [syncComment, variantNote, variantNoteSyncStatus, variantState]);
+
+  useEffect(() => {
+    if (!selectedMove || !moveCommentEntry) {
+      return;
+    }
+
+    if (moveCommentSyncStatus === "error" || moveCommentSyncStatus === "saving") {
+      return;
+    }
+
+    if (moveComment === moveCommentEntry.serverValue) {
+      return;
+    }
+
+    const handle = window.setTimeout(() => {
+      void syncComment(selectedMove.pathKey, moveComment);
+    }, 500);
+
+    return () => window.clearTimeout(handle);
+  }, [moveComment, moveCommentEntry, moveCommentSyncStatus, selectedMove, syncComment]);
+
+  const retryVariantNoteSync = useCallback(() => {
+    void syncComment(VARIANT_NOTE_KEY, variantNote);
+  }, [syncComment, variantNote]);
+
+  const retryMoveCommentSync = useCallback(() => {
+    if (selectedMove) {
+      void syncComment(selectedMove.pathKey, moveComment);
+    }
+  }, [moveComment, selectedMove, syncComment]);
 
   const canGoPrev = selectedIndex > 0;
   const canGoNext = selectedIndex >= 0 && selectedIndex < variant.moves.length - 1;
@@ -105,7 +245,13 @@ export function OpeningVariantDetailClient({ username, eco, openingName, variant
               </div>
               <div className="rounded-2xl border border-white/10 bg-background/50 px-4 py-3 text-sm text-muted-foreground">
                 <div className="text-xs uppercase tracking-[0.2em]">Comentario</div>
-                <div className="mt-1 text-lg font-semibold text-foreground">Autosave local</div>
+                <div className="mt-1 text-lg font-semibold text-foreground">
+                  {backendStatus === "loading"
+                    ? "Sincronizando"
+                    : backendStatus === "error"
+                      ? "Error de sync"
+                      : "Sincronizado"}
+                </div>
               </div>
             </div>
           </div>
@@ -157,7 +303,11 @@ export function OpeningVariantDetailClient({ username, eco, openingName, variant
           <VariantCommentsPanel
             variantTitle={variant.title}
             variantNote={variantNote}
+            variantNoteSyncStatus={variantNoteSyncStatus}
+            variantNoteSyncError={variantNoteSyncError}
             moveComment={moveComment}
+            moveCommentSyncStatus={moveCommentSyncStatus}
+            moveCommentSyncError={moveCommentSyncError}
             selectedMove={selectedMove}
             onVariantNoteChange={(value) => setVariantNote(variantStorageKey, value)}
             onMoveCommentChange={(value) => {
@@ -165,6 +315,13 @@ export function OpeningVariantDetailClient({ username, eco, openingName, variant
                 setMoveComment(variantStorageKey, selectedMove.pathKey, value);
               }
             }}
+            backendStatus={backendStatus}
+            backendError={backendError}
+            onRetryLoadComments={() => {
+              void loadVariantComments();
+            }}
+            onRetryVariantNoteSync={retryVariantNoteSync}
+            onRetryMoveCommentSync={retryMoveCommentSync}
           />
         </div>
       </div>
