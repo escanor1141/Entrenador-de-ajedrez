@@ -12,8 +12,12 @@ import {
   getReviewSummary,
   STARTING_FEN,
 } from "@/lib/review";
+import { buildReviewEvaluationSeries, summarizeReviewAnalysis } from "@/lib/review-ux";
 import { ArrowLeft, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, PlayCircle, BrainCircuit } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ReviewAnalysisStatusCard } from "@/components/review/ReviewAnalysisStatusCard";
+import { ReviewEvaluationChart } from "@/components/review/ReviewEvaluationChart";
+import { ReviewSummaryPanel } from "@/components/review/ReviewSummaryPanel";
 
 interface ReviewClientProps {
   username: string;
@@ -23,6 +27,8 @@ interface ReviewClientProps {
 export function ReviewClient({ username, game }: ReviewClientProps) {
   const timeline = useMemo(() => buildReviewTimeline(game), [game]);
   const analysis = useReviewAnalysis(game);
+  const analysisOverview = useMemo(() => summarizeReviewAnalysis(analysis), [analysis]);
+  const evaluationPoints = useMemo(() => buildReviewEvaluationSeries(analysis, timeline), [analysis, timeline]);
   const [currentPly, setCurrentPly] = useState(0);
   const [reviewStarted, setReviewStarted] = useState(false);
   const [boardWidth, setBoardWidth] = useState(320);
@@ -155,15 +161,29 @@ export function ReviewClient({ username, game }: ReviewClientProps) {
           </section>
 
           <aside className="space-y-6">
+            <ReviewAnalysisStatusCard
+              analysis={analysis}
+              overview={analysisOverview}
+              onRetryFailed={analysis.retryFailed}
+              onCancel={analysis.cancel}
+            />
+
+            <ReviewEvaluationChart points={evaluationPoints} />
+
+            <ReviewSummaryPanel overview={analysisOverview} />
+
             <section className="glass-card p-5 card-hover">
               <div className="mb-4 flex items-center gap-2">
                 <BrainCircuit className="h-5 w-5 text-accent-blue" />
-                <h2 className="text-lg font-semibold">Comentarista</h2>
+                <div>
+                  <h2 className="text-lg font-semibold">Comentarista</h2>
+                  <p className="text-sm text-muted-foreground">Sin IA generativa: comentario base y navegación por jugadas.</p>
+                </div>
               </div>
               <p className="rounded-xl border border-border bg-background-secondary/80 p-4 text-sm leading-6 text-muted-foreground">
                 {commentary}
               </p>
-              <div className="mt-4">
+              <div className="mt-4 flex gap-2">
                 <Button className="w-full" onClick={goToStart}>
                   <PlayCircle className="mr-2 h-4 w-4" />
                   Empezar revisión
@@ -173,23 +193,6 @@ export function ReviewClient({ username, game }: ReviewClientProps) {
 
             <section className="glass-card p-5 card-hover">
               <h2 className="mb-4 text-lg font-semibold">Análisis por jugada</h2>
-              <div className="mb-4 flex items-center justify-between gap-3 text-sm text-muted-foreground">
-                <p>
-                  {analysis.isAnalyzing
-                    ? `Analizando ${analysis.currentPly}/${analysis.totalPlies}`
-                    : `Listo ${analysis.totalPlies}/${analysis.totalPlies}`}
-                </p>
-                <span
-                  className={cn(
-                    "rounded-full border px-3 py-1 text-xs uppercase tracking-[0.16em]",
-                    analysis.isAnalyzing
-                      ? "border-accent-blue/30 bg-accent-blue/10 text-accent-blue"
-                      : "border-border bg-background-secondary text-muted-foreground"
-                  )}
-                >
-                  {analysis.isAnalyzing ? "En curso" : "Completo"}
-                </span>
-              </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <SummaryTile label="Jugador" value={game.userColor === "white" ? game.white : game.black} />
                 <SummaryTile label="Rival" value={game.userColor === "white" ? game.black : game.white} />
@@ -197,10 +200,7 @@ export function ReviewClient({ username, game }: ReviewClientProps) {
                 <SummaryTile label="Movs." value={String(game.moves.length)} />
               </div>
               <div className="mt-4 rounded-xl border border-border bg-background-secondary/60 p-3">
-                <p className="text-sm text-muted-foreground">
-                  Sin IA generativa: la revisión usa engine local y clasifica cada jugada progresivamente.
-                </p>
-                <div className="mt-3 max-h-72 space-y-2 overflow-auto pr-1">
+                <div className="max-h-72 space-y-2 overflow-auto pr-1">
                   {analysis.moves.map((move) => (
                     <ReviewMoveRow
                       key={move.ply}

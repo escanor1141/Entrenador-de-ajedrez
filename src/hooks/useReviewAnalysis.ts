@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createStockfishEvaluator } from "@/lib/stockfish";
 import {
   createInitialReviewAnalysis,
@@ -12,8 +12,15 @@ import type { ParsedGame, ReviewAnalysisState } from "@/types";
 export interface UseReviewAnalysisOptions
   extends Omit<ReviewAnalysisOptions, "onUpdate" | "signal"> {}
 
-export function useReviewAnalysis(game: ParsedGame, options: UseReviewAnalysisOptions = {}): ReviewAnalysisState {
+export interface UseReviewAnalysisResult extends ReviewAnalysisState {
+  retryFailed: () => void;
+  cancel: () => void;
+}
+
+export function useReviewAnalysis(game: ParsedGame, options: UseReviewAnalysisOptions = {}): UseReviewAnalysisResult {
   const [state, setState] = useState<ReviewAnalysisState>(() => createInitialReviewAnalysis(game));
+  const sessionRef = useRef<ReturnType<typeof createReviewAnalysisSession> | null>(null);
+  const [runId, setRunId] = useState(0);
   const depth = options.depth ?? 12;
   const timeoutMs = options.timeoutMs;
 
@@ -27,12 +34,29 @@ export function useReviewAnalysis(game: ParsedGame, options: UseReviewAnalysisOp
       onUpdate: setState,
     });
 
+    sessionRef.current = session;
+
     void session.promise;
 
     return () => {
       session.cancel();
+      if (sessionRef.current === session) {
+        sessionRef.current = null;
+      }
     };
-  }, [game, game.id, game.moves.length, depth, timeoutMs]);
+  }, [game, game.id, game.moves.length, depth, timeoutMs, runId]);
 
-  return state;
+  const retryFailed = useCallback(() => {
+    setRunId((value) => value + 1);
+  }, []);
+
+  const cancel = useCallback(() => {
+    sessionRef.current?.cancel();
+  }, []);
+
+  return {
+    ...state,
+    retryFailed,
+    cancel,
+  };
 }
