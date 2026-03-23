@@ -92,6 +92,17 @@ git tag vX.Y.Z && git push origin vX.Y.Z
 
 Al pushear un tag `v*`, GitHub Actions crea la release automáticamente con notas generadas.
 
+## CI en PR
+
+En cada `pull_request` hacia `main`, GitHub Actions valida:
+
+- Instalación limpia con `npm ci`
+- Tests con `npm test`
+- Typecheck con `npx tsc --noEmit`
+- Lint con `npx eslint src tests --ext .ts,.tsx --max-warnings=0`
+
+Se usa ESLint CLI directa en CI para evitar el comportamiento interactivo/deprecado de `next lint`.
+
 ## License
 
 MIT
