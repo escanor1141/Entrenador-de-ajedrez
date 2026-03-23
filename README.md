@@ -71,6 +71,16 @@ Simply use the `.env.example` without modifying it.
 DATABASE_URL="postgresql://user:password@localhost:5432/lotus_chess?schema=public"
 ```
 
+## Releases
+
+Para cortar una release nueva:
+
+```bash
+git tag vX.Y.Z && git push origin vX.Y.Z
+```
+
+Al pushear un tag `v*`, GitHub Actions crea la release automáticamente con notas generadas.
+
 ## License
 
 MIT
