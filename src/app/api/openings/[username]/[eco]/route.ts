@@ -3,6 +3,7 @@ import { fetchGamesFromLichess, parseGame } from "@/lib/lichess";
 import { OpeningData, ParsedGame } from "@/types";
 import { classifyOpening } from "@/lib/eco";
 import { getResult } from "@/lib/utils";
+import { parseGameFilters } from "@/lib/gameFilters";
 
 export async function GET(
   request: Request,
@@ -11,20 +12,19 @@ export async function GET(
   try {
     const { username, eco } = await params;
     const { searchParams } = new URL(request.url);
-    const max = parseInt(searchParams.get("max") || "300", 10);
-    const color = searchParams.get("color");
+    const { color, ...gameFilters } = parseGameFilters(searchParams, { max: 300 });
 
-    const games = await fetchGamesFromLichess(username, { max });
+    const games = await fetchGamesFromLichess(username, gameFilters);
 
     const parsedGames = games
       .map((game) => parseGame(game, username))
       .filter((game) => {
-        if (game.eco?.startsWith(eco) || eco === "other") {
-          if (color === "white") return game.userColor === "white";
-          if (color === "black") return game.userColor === "black";
-          return true;
-        }
-        return false;
+        const matchesEco = eco === "other" || game.eco?.startsWith(eco);
+        if (!matchesEco) return false;
+
+        if (color === "white") return game.userColor === "white";
+        if (color === "black") return game.userColor === "black";
+        return true;
       });
 
     const openings: Record<string, OpeningData> = {};
