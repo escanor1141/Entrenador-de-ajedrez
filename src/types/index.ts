@@ -125,6 +125,22 @@ export interface MoveNode {
   games: number;
 }
 
+export interface OpeningVariant {
+  id: string;
+  title: string;
+  lineText: string;
+  fen: string;
+  games: number;
+  wins: number;
+  draws: number;
+  losses: number;
+  winrate: number;
+  isUnlocked: boolean;
+  unlockThreshold: number;
+  pathKey: string;
+  depth: number;
+}
+
 export interface UserData {
   id: string;
   username: string;

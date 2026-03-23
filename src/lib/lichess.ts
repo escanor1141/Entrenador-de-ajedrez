@@ -136,41 +136,6 @@ export function parseGame(game: LichessGame, username: string): ParsedGame {
   };
 }
 
-export function buildMoveTree(games: ParsedGame[]): Record<string, any> {
-  const root: Record<string, any> = {};
-
-  for (const game of games) {
-    let current = root;
-    for (const move of game.moves) {
-      if (!current[move.san]) {
-        current[move.san] = {
-          move: move.san,
-          ply: move.ply,
-          children: {},
-          wins: 0,
-          draws: 0,
-          losses: 0,
-          games: 0,
-        };
-      }
-
-      const result = getResult(game.winner, game.userColor === "white");
-      if (result === "win") {
-        current[move.san].wins++;
-      } else if (result === "draw") {
-        current[move.san].draws++;
-      } else {
-        current[move.san].losses++;
-      }
-      current[move.san].games++;
-
-      current = current[move.san].children;
-    }
-  }
-
-  return root;
-}
-
 export function getTimeControl(createdAt: number, lastMoveAt: number): string {
   const totalSeconds = (lastMoveAt - createdAt) / 1000;
   const estimatedMoves = 40;

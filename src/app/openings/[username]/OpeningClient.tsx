@@ -1,15 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Chess } from "chess.js";
 import { ChessBoard } from "@/components/chess/ChessBoard";
 import { MoveTree } from "@/components/chess/MoveTree";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { Button } from "@/components/ui/Button";
-import { OpeningData, ParsedGame, type MoveNode } from "@/types";
-import { ArrowLeft, Users, Trophy, Crown, Shield, Target } from "lucide-react";
+import { OpeningData, type MoveNode } from "@/types";
+import { ArrowLeft, Users, Trophy, Crown, Shield, Target, Grid2x2 } from "lucide-react";
 import Link from "next/link";
 import { calculateWinrate } from "@/lib/utils";
+import { buildOpeningMoveTree } from "@/lib/opening-analysis";
 
 const STARTING_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
@@ -26,66 +26,6 @@ export function OpeningClient({ username, initialEco }: OpeningClientProps) {
   const [moveTree, setMoveTree] = useState<MoveNode[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  const buildMoveTree = useCallback((gameList: ParsedGame[]) => {
-    const root: Record<string, MoveNode> = {};
-
-    for (const game of gameList) {
-      const chess = new Chess();
-      let current: Record<string, MoveNode> = root;
-      const pathParts: string[] = [];
-
-      for (const move of game.moves) {
-        const key = move.ply % 2 === 1 ? `${Math.floor(move.ply / 2) + 1}. ${move.san}` : move.san;
-        const moveKey = move.san;
-        const pathKey = [...pathParts, moveKey].join(" > ");
-        const chessMove = chess.move(move.san);
-
-        if (!chessMove) {
-          break;
-        }
-
-        const fen = chess.fen();
-
-        if (!current[key]) {
-          current[key] = {
-            id: pathKey,
-            move: move.san,
-            san: move.san,
-            ply: move.ply,
-            fen,
-            pathKey,
-            children: [],
-            wins: 0,
-            draws: 0,
-            losses: 0,
-            games: 0,
-          };
-        }
-
-        const result =
-          game.winner === null
-            ? "draw"
-            : (game.userColor === "white" && game.winner === "white") ||
-                (game.userColor === "black" && game.winner === "black")
-              ? "win"
-              : "loss";
-
-        if (result === "win") current[key].wins++;
-        else if (result === "draw") current[key].draws++;
-        else current[key].losses++;
-        current[key].games++;
-
-        current[key].fen = fen;
-        current[key].pathKey = pathKey;
-
-        pathParts.push(moveKey);
-        current = current[key].children as unknown as Record<string, MoveNode>;
-      }
-    }
-
-    setMoveTree(Object.values(root));
-  }, []);
-
   const fetchOpeningData = useCallback(
     async (ecoCode: string) => {
       setIsLoading(true);
@@ -98,7 +38,7 @@ export function OpeningClient({ username, initialEco }: OpeningClientProps) {
           setSelectedOpening(data.openings[ecoCode]);
         }
         if (data.games) {
-          buildMoveTree(data.games);
+          setMoveTree(buildOpeningMoveTree(data.games));
         }
       } catch (error) {
         console.error("Error fetching opening data:", error);
@@ -106,7 +46,7 @@ export function OpeningClient({ username, initialEco }: OpeningClientProps) {
         setIsLoading(false);
       }
     },
-    [buildMoveTree, username]
+    [username]
   );
 
   useEffect(() => {
@@ -196,6 +136,12 @@ export function OpeningClient({ username, initialEco }: OpeningClientProps) {
             <Button variant="outline">
               <Target className="w-4 h-4 mr-2" />
               Entrenar Apertura
+            </Button>
+          </Link>
+          <Link href={`/openings/${username}/${opening.eco}/variants`}>
+            <Button variant="outline">
+              <Grid2x2 className="w-4 h-4 mr-2" />
+              Variantes
             </Button>
           </Link>
         </div>
