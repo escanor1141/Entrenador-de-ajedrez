@@ -54,7 +54,7 @@ export function OpeningVariantsClient({ username, eco, openingName, variants }: 
         ) : (
           <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
             {variants.map((variant) => (
-              <OpeningVariantCard key={variant.id} variant={variant} />
+              <OpeningVariantCard key={variant.id} variant={variant} username={username} eco={eco} />
             ))}
           </div>
         )}

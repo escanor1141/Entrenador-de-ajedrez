@@ -49,6 +49,9 @@ describe("opening analysis helpers", () => {
     expect(variants[0].isUnlocked).toBe(true);
     expect(variants[0].lineText).toBe("1. e4 c5 2. Nf3 d6");
     expect(variants[0].fen).toBe(expectedFenGame.fen());
+    expect(variants[0].moves).toHaveLength(4);
+    expect(variants[0].moves[0].san).toBe("e4");
+    expect(variants[0].moves[3].san).toBe("d6");
     expect(variants[1].games).toBe(1);
     expect(variants[1].isUnlocked).toBe(false);
   });

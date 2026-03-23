@@ -1,7 +1,7 @@
 import { Chess } from "chess.js";
 import { classifyOpening } from "@/lib/eco";
 import { calculateWinrate, getResult } from "@/lib/utils";
-import type { MoveNode, OpeningVariant, ParsedGame } from "@/types";
+import type { MoveNode, OpeningVariant, ParsedGame, VariantMove } from "@/types";
 
 interface TreeNode {
   id: string;
@@ -155,6 +155,39 @@ function toMoveNode(node: TreeNode): MoveNode {
   };
 }
 
+function toVariantMove(node: TreeNode): VariantMove {
+  return {
+    ply: node.ply,
+    san: node.san,
+    fen: node.fen,
+    pathKey: node.pathKey,
+  };
+}
+
+function buildOpeningPrefixMoves(game: ParsedGame): VariantMove[] {
+  const chess = new Chess();
+  const openingPly = game.openingPly ?? 0;
+  const prefixMoves = game.moves.filter((move) => move.ply <= openingPly);
+  const moves: VariantMove[] = [];
+  const pathParts: string[] = [];
+
+  for (const move of prefixMoves) {
+    if (!chess.move(move.san)) {
+      break;
+    }
+
+    pathParts.push(move.san);
+    moves.push({
+      ply: move.ply,
+      san: move.san,
+      fen: chess.fen(),
+      pathKey: pathParts.join(" > "),
+    });
+  }
+
+  return moves;
+}
+
 function buildDisplayMoveText(node: TreeNode): string {
   return getTreeKey(node.ply, node.san);
 }
@@ -186,15 +219,15 @@ function lineToText(line: TreeNode[]): string {
 }
 
 function buildOpeningPrefixText(game: ParsedGame): string {
-  const openingPly = game.openingPly ?? 0;
-  const prefixMoves = game.moves.filter((move) => move.ply <= openingPly);
+  const prefixMoves = buildOpeningPrefixMoves(game);
 
-  return prefixMoves.map((move) => (move.ply % 2 === 1 ? `${Math.floor(move.ply / 2) + 1}. ${move.san}` : move.san)).join(" ");
+  return prefixMoves
+    .map((move) => (move.ply % 2 === 1 ? `${Math.floor(move.ply / 2) + 1}. ${move.san}` : move.san))
+    .join(" ");
 }
 
 function buildOpeningPrefixClassificationText(game: ParsedGame): string {
-  const openingPly = game.openingPly ?? 0;
-  const prefixMoves = game.moves.filter((move) => move.ply <= openingPly);
+  const prefixMoves = buildOpeningPrefixMoves(game);
 
   return prefixMoves
     .map((move) => (move.ply % 2 === 1 ? `${Math.floor(move.ply / 2) + 1}.${move.san}` : move.san))
@@ -225,6 +258,7 @@ export function buildOpeningVariants(
   const unlockThreshold = options.unlockThreshold ?? 10;
   const filteredGames = games.filter((game) => matchesOpeningEco(game.eco, openingEco));
   const root = buildContinuationTree(filteredGames);
+  const prefixMoves = filteredGames[0] ? buildOpeningPrefixMoves(filteredGames[0]) : [];
   const prefixText = filteredGames[0] ? buildOpeningPrefixText(filteredGames[0]) : "";
   const prefixClassificationText = filteredGames[0] ? buildOpeningPrefixClassificationText(filteredGames[0]) : "";
 
@@ -242,11 +276,13 @@ export function buildOpeningVariants(
       const classification = classifyOpening(classificationInput);
       const title = classification.name !== "Irregular" ? classification.name : `Main line ${index + 1}`;
       const finalFen = principalLine[principalLine.length - 1]?.fen ?? node.fen;
+      const moves = [...prefixMoves, ...principalLine.map(toVariantMove)];
 
       return {
         id: `${openingEco}:${node.pathKey}`,
         title,
         lineText,
+        moves,
         fen: finalFen,
         games: node.games,
         wins: node.wins,

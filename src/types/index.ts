@@ -127,10 +127,18 @@ export interface MoveNode {
   games: number;
 }
 
+export interface VariantMove {
+  ply: number;
+  san: string;
+  fen: string;
+  pathKey: string;
+}
+
 export interface OpeningVariant {
   id: string;
   title: string;
   lineText: string;
+  moves: VariantMove[];
   fen: string;
   games: number;
   wins: number;
