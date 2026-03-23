@@ -3,37 +3,27 @@
 import React, { useState } from "react";
 import { ChevronRight, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-interface MoveNode {
-  move: string;
-  san: string;
-  ply: number;
-  children: MoveNode[];
-  wins: number;
-  draws: number;
-  losses: number;
-  games: number;
-}
+import type { MoveNode } from "@/types";
 
 interface MoveTreeProps {
   tree: MoveNode[];
-  currentPly: number;
-  onMoveClick: (ply: number, node: MoveNode) => void;
+  selectedFen: string;
+  onMoveClick: (node: MoveNode) => void;
 }
 
 function TreeNode({
   node,
   depth,
-  currentPly,
+  selectedFen,
   onMoveClick,
 }: {
   node: MoveNode;
   depth: number;
-  currentPly: number;
-  onMoveClick: (ply: number, node: MoveNode) => void;
+  selectedFen: string;
+  onMoveClick: (node: MoveNode) => void;
 }) {
   const [isExpanded, setIsExpanded] = useState(true);
-  const isActive = currentPly === node.ply;
+  const isActive = selectedFen === node.fen;
   const winrate = node.games > 0 ? (node.wins / node.games) * 100 : 0;
   const drawrate = node.games > 0 ? (node.draws / node.games) * 100 : 0;
   const lossrate = node.games > 0 ? (node.losses / node.games) * 100 : 0;
@@ -48,7 +38,7 @@ function TreeNode({
             : "hover:bg-background-secondary"
         )}
         style={{ paddingLeft: `${depth * 16 + 8}px` }}
-        onClick={() => onMoveClick(node.ply, node)}
+        onClick={() => onMoveClick(node)}
       >
         {node.children.length > 0 && (
           <button
@@ -91,12 +81,12 @@ function TreeNode({
         </div>
       </div>
       {isExpanded &&
-        node.children.map((child, i) => (
+        node.children.map((child) => (
           <TreeNode
-            key={i}
+            key={child.pathKey}
             node={child}
             depth={depth + 1}
-            currentPly={currentPly}
+            selectedFen={selectedFen}
             onMoveClick={onMoveClick}
           />
         ))}
@@ -104,7 +94,7 @@ function TreeNode({
   );
 }
 
-export function MoveTree({ tree, currentPly, onMoveClick }: MoveTreeProps) {
+export function MoveTree({ tree, selectedFen, onMoveClick }: MoveTreeProps) {
   return (
     <div className="bg-background-secondary rounded-lg p-4 overflow-auto max-h-[400px] scrollbar-thin">
       {tree.length === 0 ? (
@@ -112,12 +102,12 @@ export function MoveTree({ tree, currentPly, onMoveClick }: MoveTreeProps) {
           No moves recorded yet
         </div>
       ) : (
-        tree.map((node, i) => (
+        tree.map((node) => (
           <TreeNode
-            key={i}
+            key={node.pathKey}
             node={node}
             depth={0}
-            currentPly={currentPly}
+            selectedFen={selectedFen}
             onMoveClick={onMoveClick}
           />
         ))

@@ -1,28 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { use } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { Chess } from "chess.js";
 import { ChessBoard } from "@/components/chess/ChessBoard";
 import { MoveTree } from "@/components/chess/MoveTree";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { Button } from "@/components/ui/Button";
-import { OpeningData, ParsedGame } from "@/types";
-import { ArrowLeft, Users, Trophy, Clock, Crown, Shield, Target } from "lucide-react";
+import { OpeningData, ParsedGame, type MoveNode } from "@/types";
+import { ArrowLeft, Users, Trophy, Crown, Shield, Target } from "lucide-react";
 import Link from "next/link";
-import { classifyOpening } from "@/lib/eco";
 import { calculateWinrate } from "@/lib/utils";
-import { useTrainingStore } from "@/store/trainingStore";
 
-interface MoveNode {
-  move: string;
-  san: string;
-  ply: number;
-  children: MoveNode[];
-  wins: number;
-  draws: number;
-  losses: number;
-  games: number;
-}
+const STARTING_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
 interface OpeningClientProps {
   username: string;
@@ -33,54 +22,38 @@ export function OpeningClient({ username, initialEco }: OpeningClientProps) {
   const [eco, setEco] = useState(initialEco || "");
   const [openings, setOpenings] = useState<OpeningData[]>([]);
   const [selectedOpening, setSelectedOpening] = useState<OpeningData | null>(null);
-  const [games, setGames] = useState<ParsedGame[]>([]);
-  const [position, setPosition] = useState("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+  const [selectedFen, setSelectedFen] = useState(STARTING_FEN);
   const [moveTree, setMoveTree] = useState<MoveNode[]>([]);
-  const [currentPly, setCurrentPly] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
-  const importRepertoire = useTrainingStore((s) => s.importRepertoire);
-  const repertoires = useTrainingStore((s) => s.repertoires);
 
-  useEffect(() => {
-    if (eco) {
-      fetchOpeningData(eco);
-    }
-  }, [eco]);
-
-  const fetchOpeningData = async (ecoCode: string) => {
-    setIsLoading(true);
-    try {
-      const res = await fetch(`/api/openings/${username}?eco=${ecoCode}&max=300`);
-      const data = await res.json();
-      
-      if (data.openings) {
-        setOpenings(Object.values(data.openings));
-        setSelectedOpening(data.openings[ecoCode]);
-      }
-      if (data.games) {
-        setGames(data.games);
-        buildMoveTree(data.games);
-      }
-    } catch (error) {
-      console.error("Error fetching opening data:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const buildMoveTree = (gameList: ParsedGame[]) => {
+  const buildMoveTree = useCallback((gameList: ParsedGame[]) => {
     const root: Record<string, MoveNode> = {};
-    
+
     for (const game of gameList) {
+      const chess = new Chess();
       let current: Record<string, MoveNode> = root;
+      const pathParts: string[] = [];
+
       for (const move of game.moves) {
         const key = move.ply % 2 === 1 ? `${Math.floor(move.ply / 2) + 1}. ${move.san}` : move.san;
-        
+        const moveKey = move.san;
+        const pathKey = [...pathParts, moveKey].join(" > ");
+        const chessMove = chess.move(move.san);
+
+        if (!chessMove) {
+          break;
+        }
+
+        const fen = chess.fen();
+
         if (!current[key]) {
           current[key] = {
-            move: move.uci,
+            id: pathKey,
+            move: move.san,
             san: move.san,
             ply: move.ply,
+            fen,
+            pathKey,
             children: [],
             wins: 0,
             draws: 0,
@@ -88,23 +61,63 @@ export function OpeningClient({ username, initialEco }: OpeningClientProps) {
             games: 0,
           };
         }
-        
-        const result = game.winner === null ? "draw" 
-          : (game.userColor === "white" && game.winner === "white") || 
-            (game.userColor === "black" && game.winner === "black")
-            ? "win" : "loss";
-        
+
+        const result =
+          game.winner === null
+            ? "draw"
+            : (game.userColor === "white" && game.winner === "white") ||
+                (game.userColor === "black" && game.winner === "black")
+              ? "win"
+              : "loss";
+
         if (result === "win") current[key].wins++;
         else if (result === "draw") current[key].draws++;
         else current[key].losses++;
         current[key].games++;
-        
+
+        current[key].fen = fen;
+        current[key].pathKey = pathKey;
+
+        pathParts.push(moveKey);
         current = current[key].children as unknown as Record<string, MoveNode>;
       }
     }
-    
+
     setMoveTree(Object.values(root));
-  };
+  }, []);
+
+  const fetchOpeningData = useCallback(
+    async (ecoCode: string) => {
+      setIsLoading(true);
+      try {
+        const res = await fetch(`/api/openings/${username}?eco=${ecoCode}&max=300`);
+        const data = await res.json();
+
+        if (data.openings) {
+          setOpenings(Object.values(data.openings));
+          setSelectedOpening(data.openings[ecoCode]);
+        }
+        if (data.games) {
+          buildMoveTree(data.games);
+        }
+      } catch (error) {
+        console.error("Error fetching opening data:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [buildMoveTree, username]
+  );
+
+  useEffect(() => {
+    setSelectedFen(STARTING_FEN);
+  }, [eco]);
+
+  useEffect(() => {
+    if (eco) {
+      void fetchOpeningData(eco);
+    }
+  }, [eco, fetchOpeningData]);
 
   const handleOpeningSelect = (ecoCode: string) => {
     setEco(ecoCode);
@@ -220,8 +233,8 @@ export function OpeningClient({ username, initialEco }: OpeningClientProps) {
               <h2 className="text-lg font-semibold mb-4">Interactive Board</h2>
               <div className="flex justify-center mb-4">
                 <ChessBoard
-                  position={position}
-                  onMove={() => true}
+                  position={selectedFen}
+                  onPositionChange={setSelectedFen}
                   boardWidth={400}
                 />
               </div>
@@ -231,8 +244,8 @@ export function OpeningClient({ username, initialEco }: OpeningClientProps) {
               <h2 className="text-lg font-semibold mb-4">Move Tree</h2>
               <MoveTree
                 tree={moveTree}
-                currentPly={currentPly}
-                onMoveClick={(ply) => setCurrentPly(ply)}
+                selectedFen={selectedFen}
+                onMoveClick={(node) => setSelectedFen(node.fen)}
               />
             </div>
           </div>

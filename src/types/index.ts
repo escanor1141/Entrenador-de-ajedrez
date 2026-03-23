@@ -112,9 +112,12 @@ export interface OpeningStats {
 }
 
 export interface MoveNode {
+  id: string;
   move: string;
   san: string;
   ply: number;
+  fen: string;
+  pathKey: string;
   children: MoveNode[];
   wins: number;
   draws: number;
