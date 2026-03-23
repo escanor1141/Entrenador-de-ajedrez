@@ -1,0 +1,69 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  lichessId String   @unique
+  username  String   @unique
+  cachedAt  DateTime @default(now())
+  games     Game[]
+}
+
+model Game {
+  id            String   @id @default(cuid())
+  lichessId     String   @unique
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  pgn           String
+  white         String
+  black         String
+  result        String
+  winner        String?
+  eco           String?
+  openingName   String?
+  openingPly    Int?
+  rated         Boolean
+  speed         String
+  perf          String?
+  whiteElo      Int?
+  blackElo      Int?
+  accuracyWhite Decimal?
+  accuracyBlack Decimal?
+  moves         Json
+  playedAt      DateTime
+  cachedAt      DateTime @default(now())
+
+  @@index([userId, playedAt])
+  @@index([eco])
+  @@index([speed])
+}
+
+model OpeningStats {
+  id               String   @id @default(cuid())
+  userId           String
+  eco              String
+  name             String
+  totalGames       Int
+  wins             Int
+  draws            Int
+  losses           Int
+  asWhite          Int
+  asBlack          Int
+  bulletGames      Int      @default(0)
+  blitzGames       Int      @default(0)
+  rapidGames       Int      @default(0)
+  classicalGames   Int      @default(0)
+  blunderCount     Int      @default(0)
+  mistakeCount     Int      @default(0)
+  inaccuracyCount  Int      @default(0)
+  avgAccuracy      Decimal?
+  lastUpdated      DateTime @default(now())
+
+  @@unique([userId, eco])
+}

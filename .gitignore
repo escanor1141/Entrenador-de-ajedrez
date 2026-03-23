@@ -1,0 +1,12 @@
+.env
+.env.*
+!.env.example
+
+node_modules/
+.next/
+out/
+
+*.log
+server.log
+
+tsconfig.tsbuildinfo
