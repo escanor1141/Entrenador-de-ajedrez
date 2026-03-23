@@ -1,3 +1,5 @@
+export * from "./review";
+
 export interface OpeningData {
   eco: string;
   name: string;
