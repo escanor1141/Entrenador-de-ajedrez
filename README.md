@@ -58,6 +58,17 @@ npx eslint src/lib/gameFilters.ts src/lib/openings.ts src/lib/training-engine.ts
 
 Los tests corren con Vitest en entorno Node, sin red y sin depender de Lichess.
 
+### DB setup + smoke comments API
+
+```bash
+npm run db:setup
+npm run test:smoke:comments
+```
+
+- `db:setup` genera Prisma Client y aplica el schema a la DB local con `prisma db push`.
+- `test:smoke:comments` valida el contrato HTTP de `GET`, `POST` y `DELETE` para comentarios de variantes.
+- Si tocás el schema, corré también `npx tsc --noEmit` y el lint sobre los archivos modificados.
+
 ### Development without Database
 
 The app can run without a database - it will fetch data directly from Lichess API.

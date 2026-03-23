@@ -11,6 +11,8 @@
     "test:watch": "vitest",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
+    "db:setup": "npm run db:generate && npm run db:push",
+    "test:smoke:comments": "vitest run tests/app/opening-variant-comments-route.test.ts",
     "db:studio": "prisma studio"
   },
   "dependencies": {
