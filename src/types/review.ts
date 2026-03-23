@@ -10,12 +10,19 @@ export type EngineScore =
 
 export type MoveClassification = "best" | "good" | "inaccuracy" | "mistake" | "blunder";
 
+export type ReviewMoveState = "pending" | "ready" | "error";
+
 export interface ReviewMoveAnalysis {
   ply: number;
   san: string;
   uci: string;
+  state: ReviewMoveState;
   score?: EngineScore | null;
+  bestScore?: EngineScore | null;
+  playedScore?: EngineScore | null;
+  centipawnLoss?: number | null;
   classification?: MoveClassification | null;
+  error?: string | null;
 }
 
 export interface ReviewAnalysisState {

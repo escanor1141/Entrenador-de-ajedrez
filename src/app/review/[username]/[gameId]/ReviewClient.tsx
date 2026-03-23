@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ChessBoard } from "@/components/chess/ChessBoard";
 import { Button } from "@/components/ui/Button";
-import { ParsedGame } from "@/types";
+import { useReviewAnalysis } from "@/hooks/useReviewAnalysis";
+import type { ParsedGame, MoveClassification, ReviewMoveAnalysis } from "@/types";
 import {
   buildReviewTimeline,
   getReviewCommentary,
@@ -21,6 +22,7 @@ interface ReviewClientProps {
 
 export function ReviewClient({ username, game }: ReviewClientProps) {
   const timeline = useMemo(() => buildReviewTimeline(game), [game]);
+  const analysis = useReviewAnalysis(game);
   const [currentPly, setCurrentPly] = useState(0);
   const [reviewStarted, setReviewStarted] = useState(false);
   const [boardWidth, setBoardWidth] = useState(320);
@@ -170,15 +172,52 @@ export function ReviewClient({ username, game }: ReviewClientProps) {
             </section>
 
             <section className="glass-card p-5 card-hover">
-              <h2 className="mb-4 text-lg font-semibold">Resumen MVP</h2>
+              <h2 className="mb-4 text-lg font-semibold">Análisis por jugada</h2>
+              <div className="mb-4 flex items-center justify-between gap-3 text-sm text-muted-foreground">
+                <p>
+                  {analysis.isAnalyzing
+                    ? `Analizando ${analysis.currentPly}/${analysis.totalPlies}`
+                    : `Listo ${analysis.totalPlies}/${analysis.totalPlies}`}
+                </p>
+                <span
+                  className={cn(
+                    "rounded-full border px-3 py-1 text-xs uppercase tracking-[0.16em]",
+                    analysis.isAnalyzing
+                      ? "border-accent-blue/30 bg-accent-blue/10 text-accent-blue"
+                      : "border-border bg-background-secondary text-muted-foreground"
+                  )}
+                >
+                  {analysis.isAnalyzing ? "En curso" : "Completo"}
+                </span>
+              </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <SummaryTile label="Jugador" value={game.userColor === "white" ? game.white : game.black} />
                 <SummaryTile label="Rival" value={game.userColor === "white" ? game.black : game.white} />
                 <SummaryTile label="Resultado" value={game.result} />
                 <SummaryTile label="Movs." value={String(game.moves.length)} />
               </div>
-              <div className={cn("mt-4 rounded-xl border border-dashed border-border bg-background-secondary/60 p-4 text-sm text-muted-foreground")}>
-                MVP: estadísticas base derivadas de la partida actual. Sin engine, sin clasificación final y sin IA generativa.
+              <div className="mt-4 rounded-xl border border-border bg-background-secondary/60 p-3">
+                <p className="text-sm text-muted-foreground">
+                  Sin IA generativa: la revisión usa engine local y clasifica cada jugada progresivamente.
+                </p>
+                <div className="mt-3 max-h-72 space-y-2 overflow-auto pr-1">
+                  {analysis.moves.map((move) => (
+                    <ReviewMoveRow
+                      key={move.ply}
+                      move={move}
+                      isActive={currentPly === move.ply}
+                      onSelect={() => {
+                        setReviewStarted(true);
+                        setCurrentPly(move.ply);
+                      }}
+                    />
+                  ))}
+                  {analysis.moves.length === 0 ? (
+                    <div className="rounded-lg border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
+                      No hay jugadas para analizar.
+                    </div>
+                  ) : null}
+                </div>
               </div>
             </section>
 
@@ -223,4 +262,88 @@ function SummaryTile({ label, value }: SummaryTileProps) {
       <p className="mt-1 text-sm font-medium text-foreground">{value}</p>
     </div>
   );
+}
+
+interface ReviewMoveRowProps {
+  move: ReviewMoveAnalysis;
+  isActive: boolean;
+  onSelect: () => void;
+}
+
+function ReviewMoveRow({ move, isActive, onSelect }: ReviewMoveRowProps) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={cn(
+        "w-full rounded-lg border px-3 py-2 text-left transition-colors",
+        isActive
+          ? "border-accent-blue bg-accent-blue/10"
+          : "border-border bg-background/50 hover:border-border/80 hover:bg-background-secondary"
+      )}
+    >
+      <div className="flex items-center gap-3">
+        <span className="min-w-12 font-mono text-xs text-muted-foreground">{formatMoveLabel(move.ply, move.san)}</span>
+        <span className="truncate text-sm font-medium text-foreground">{move.san}</span>
+        <div className="ml-auto flex items-center gap-2">
+          <ReviewMoveBadge move={move} />
+        </div>
+      </div>
+      {move.state === "error" ? (
+        <p className="mt-2 text-xs text-accent-red">{move.error ?? "No se pudo clasificar esta jugada."}</p>
+      ) : null}
+    </button>
+  );
+}
+
+function ReviewMoveBadge({ move }: { move: ReviewMoveAnalysis }) {
+  if (move.state === "pending") {
+    return <span className="rounded-full border border-dashed border-border px-2 py-0.5 text-xs text-muted-foreground">Pendiente</span>;
+  }
+
+  if (move.state === "error") {
+    return <span className="rounded-full border border-accent-red/30 bg-accent-red/10 px-2 py-0.5 text-xs text-accent-red">Error</span>;
+  }
+
+  const classification = move.classification ?? "good";
+
+  return (
+    <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", getClassificationBadgeClassName(classification))}>
+      {getClassificationLabel(classification)}
+    </span>
+  );
+}
+
+function getClassificationLabel(classification: MoveClassification): string {
+  switch (classification) {
+    case "best":
+      return "Mejor";
+    case "good":
+      return "Buena";
+    case "inaccuracy":
+      return "Imprecisión";
+    case "mistake":
+      return "Error";
+    case "blunder":
+      return "Blunder";
+  }
+}
+
+function getClassificationBadgeClassName(classification: MoveClassification): string {
+  switch (classification) {
+    case "best":
+      return "bg-accent-green/15 text-accent-green";
+    case "good":
+      return "bg-accent-blue/15 text-accent-blue";
+    case "inaccuracy":
+      return "bg-accent-yellow/15 text-accent-yellow";
+    case "mistake":
+      return "bg-orange-500/15 text-orange-500";
+    case "blunder":
+      return "bg-accent-red/15 text-accent-red";
+  }
+}
+
+function formatMoveLabel(ply: number, san: string): string {
+  return ply % 2 === 1 ? `${Math.ceil(ply / 2)}. ${san}` : `${Math.ceil(ply / 2)}... ${san}`;
 }
