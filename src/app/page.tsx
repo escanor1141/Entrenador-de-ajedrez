@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Trophy, Search, BarChart3, BookOpen, Target, Zap, TrendingUp, Crown, TrainFront } from "lucide-react";
 
 export default function HomePage() {
@@ -83,13 +84,13 @@ export default function HomePage() {
             </span>
           </div>
           <nav className="flex items-center gap-6">
-            <a
-              href="/train"
+            <Link
+              href="/train/"
               className="text-muted-foreground hover:text-foreground transition-colors text-sm flex items-center gap-2"
             >
               <TrainFront className="w-4 h-4" />
               <span>Entrenar</span>
-            </a>
+            </Link>
             <a
               href="https://lichess.org"
               target="_blank"
