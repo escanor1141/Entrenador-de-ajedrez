@@ -67,6 +67,7 @@ npm run test:smoke:comments
 
 - `db:setup` genera Prisma Client y aplica el schema a la DB local con `prisma db push`.
 - `test:smoke:comments` valida el contrato HTTP de `GET`, `POST` y `DELETE` para comentarios de variantes.
+- Asegurate de que `DATABASE_URL` apunte a un PostgreSQL local con permisos de escritura; si `db:setup` falla con `P1010`, es un problema de credenciales/permisos, no del script.
 - Si tocás el schema, corré también `npx tsc --noEmit` y el lint sobre los archivos modificados.
 
 ### Development without Database

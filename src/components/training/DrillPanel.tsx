@@ -32,6 +32,45 @@ export function DrillPanel({ repertoire, config, onComplete }: DrillPanelProps) 
   const [highlights, setHighlights] = useState<{ square: string; color: string }[]>([]);
   const [arrows, setArrows] = useState<{ from: string; to: string; color: string }[]>([]);
 
+  const advanceToFirstUserMove = useCallback((moves: DrillMove[], expected: Map<number, string>) => {
+    let idx = 0;
+    while (idx < moves.length && !expected.has(idx)) {
+      idx++;
+    }
+
+    if (idx >= moves.length) {
+      setPhase("completed");
+      return;
+    }
+
+    setCurrentIndex(idx);
+    setCurrentFen(moves[idx].fen);
+    setPhase("playing");
+    setHighlights([]);
+    setArrows([]);
+  }, []);
+
+  const advanceToNext = useCallback(() => {
+    setHighlights([]);
+    setArrows([]);
+
+    let nextIdx = currentIndex + 1;
+    while (nextIdx < sequence.length && !expectedMoves.has(nextIdx)) {
+      nextIdx++;
+    }
+
+    if (nextIdx >= sequence.length) {
+      setPhase("completed");
+      onComplete?.(score + 1, totalAttempts + 1);
+      return;
+    }
+
+    setCurrentIndex(nextIdx);
+    setCurrentFen(sequence[nextIdx].fen);
+    setPhase("playing");
+    setFeedback("");
+  }, [currentIndex, expectedMoves, onComplete, score, sequence, totalAttempts]);
+
   useEffect(() => {
     const { moves, expectedUserMoves } = buildDrillSequence(
       repertoire,
@@ -51,25 +90,7 @@ export function DrillPanel({ repertoire, config, onComplete }: DrillPanelProps) 
       setCurrentFen(moves[0].fen);
       advanceToFirstUserMove(moves, expectedUserMoves);
     }
-  }, [repertoire, config, progress]);
-
-  const advanceToFirstUserMove = (moves: DrillMove[], expected: Map<number, string>) => {
-    let idx = 0;
-    while (idx < moves.length && !expected.has(idx)) {
-      idx++;
-    }
-
-    if (idx >= moves.length) {
-      setPhase("completed");
-      return;
-    }
-
-    setCurrentIndex(idx);
-    setCurrentFen(moves[idx].fen);
-    setPhase("playing");
-    setHighlights([]);
-    setArrows([]);
-  };
+  }, [advanceToFirstUserMove, config, progress, repertoire]);
 
   const handleMove = useCallback(
     (from: string, to: string) => {
@@ -123,29 +144,8 @@ export function DrillPanel({ repertoire, config, onComplete }: DrillPanelProps) 
         return false;
       }
     },
-    [phase, currentFen, currentIndex, expectedMoves, updateProgress]
+    [advanceToNext, currentFen, currentIndex, expectedMoves, phase, updateProgress]
   );
-
-  const advanceToNext = () => {
-    setHighlights([]);
-    setArrows([]);
-
-    let nextIdx = currentIndex + 1;
-    while (nextIdx < sequence.length && !expectedMoves.has(nextIdx)) {
-      nextIdx++;
-    }
-
-    if (nextIdx >= sequence.length) {
-      setPhase("completed");
-      onComplete?.(score + 1, totalAttempts + 1);
-      return;
-    }
-
-    setCurrentIndex(nextIdx);
-    setCurrentFen(sequence[nextIdx].fen);
-    setPhase("playing");
-    setFeedback("");
-  };
 
   const handleContinueAfterWrong = () => {
     const expected = expectedMoves.get(currentIndex);
